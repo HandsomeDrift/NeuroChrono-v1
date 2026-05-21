@@ -1,0 +1,8 @@
+# Tier 3 E7: w/o Text Guidance — zero out alpha_txt
+model:
+  sampler_config:
+    params:
+      path_b:
+        enabled: true
+        t_emb_dim: 256
+        alpha_zero_channels: ["alpha_txt"]

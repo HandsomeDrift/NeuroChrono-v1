@@ -1,0 +1,8 @@
+# Tier 3 E8: w/o Motion Guidance — zero out alpha_mot
+model:
+  sampler_config:
+    params:
+      path_b:
+        enabled: true
+        t_emb_dim: 256
+        alpha_zero_channels: ["alpha_mot"]

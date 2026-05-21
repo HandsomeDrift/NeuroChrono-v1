@@ -1,0 +1,8 @@
+# Tier 3 E10: Prior Only — bypass gate_net, use pure prior α(τ)
+model:
+  sampler_config:
+    params:
+      path_b:
+        enabled: true
+        t_emb_dim: 256
+        alpha_prior_only: true

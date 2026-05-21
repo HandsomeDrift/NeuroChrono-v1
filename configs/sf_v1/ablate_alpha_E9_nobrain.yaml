@@ -1,0 +1,8 @@
+# Tier 3 E9: w/o Brain Self-Gating — zero out alpha_brain
+model:
+  sampler_config:
+    params:
+      path_b:
+        enabled: true
+        t_emb_dim: 256
+        alpha_zero_channels: ["alpha_brain"]
