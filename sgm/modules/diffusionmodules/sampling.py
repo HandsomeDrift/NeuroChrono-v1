@@ -727,6 +727,12 @@ class VPSDEDPMPP2MSampler(VideoDDIMSampler):
         # ["alpha_key", "alpha_txt", "alpha_mot", "alpha_brain"].
         self.path_b_clamp_channels = list(self.path_b.get("clamp_channels", []))
 
+        # Tier 3 ablation: zero out selected alpha channels at inference.
+        # Valid entries: ["alpha_key", "alpha_txt", "alpha_mot", "alpha_brain"].
+        self.alpha_zero_channels = list(self.path_b.get("alpha_zero_channels", []))
+        # Tier 3 ablation: bypass gate_net, use pure prior α(τ) at every step.
+        self.alpha_prior_only = bool(self.path_b.get("alpha_prior_only", False))
+
         # §6 perturbation-analysis hooks for Exp 1 (single-step α perturbation)
         # and Exp 4 (single-step latent perturbation). perturb_spec is a dict
         # with optional keys:
@@ -866,6 +872,37 @@ class VPSDEDPMPP2MSampler(VideoDDIMSampler):
                         if ch in ch_idx:
                             col = ch_idx[ch]
                             alphas_t[ch] = alpha_prior_b4[:, col:col+1].to(alphas_t[ch].dtype)
+            # Tier 3 ablation: zero out selected alpha channels
+            if self.alpha_zero_channels:
+                alphas_t = dict(alphas_t)
+                for ch in self.alpha_zero_channels:
+                    if ch in alphas_t:
+                        alphas_t[ch] = torch.zeros_like(alphas_t[ch])
+            # Tier 3 ablation: gate_net bypass — use pure prior α(τ)
+            if self.alpha_prior_only:
+                gf = gated_fusion
+                if getattr(gf, "use_prior_schedule", False):
+                    sched = 1.0 - 2.0 / (
+                        1.0 + torch.exp(-gf.prior_steepness * (tau - gf.prior_midpoint))
+                    )
+                    prior_bias_b4 = (
+                        gf.prior_amp
+                        * sched.view(-1, 1)
+                        * gf.prior_sign.to(sched.dtype).view(1, -1)
+                    )
+                    alpha_prior = torch.sigmoid(prior_bias_b4)
+                    alphas_t = {
+                        "alpha_key": alpha_prior[:, 0:1].to(slow_feat.dtype),
+                        "alpha_txt": alpha_prior[:, 1:2].to(slow_feat.dtype),
+                        "alpha_mot": alpha_prior[:, 2:3].to(slow_feat.dtype),
+                        "alpha_brain": alpha_prior[:, 3:4].to(slow_feat.dtype),
+                    }
+                else:
+                    alphas_t = {
+                        k: torch.full((slow_feat.shape[0], 1), 0.5,
+                                      device=slow_feat.device, dtype=slow_feat.dtype)
+                        for k in ["alpha_key", "alpha_txt", "alpha_mot", "alpha_brain"]
+                    }
             if at_perturb_step:
                 alphas_t = self._apply_alpha_perturb(alphas_t)
             new_context = embedder.guidance_adapter.mix_context(
