@@ -87,6 +87,7 @@ class SFBrainEmbedder(AbstractEmbModel):
         # Branch freezing for curriculum training
         freeze_slow_branch=False,
         freeze_fast_branch=False,
+        active_branches="both",  # "both" | "slow_only" | "fast_only" for ablation
         # Expose pre-mix components for timestep-aware alpha remix in sampler (direction ① path A)
         expose_premix=False,
     ):
@@ -97,6 +98,7 @@ class SFBrainEmbedder(AbstractEmbModel):
         self.use_fast_branch = use_fast_branch
         self.freeze_slow_branch = freeze_slow_branch
         self.freeze_fast_branch = freeze_fast_branch
+        self.active_branches = active_branches
         self.use_gated_fusion = use_gated_fusion
         self.use_multi_guidance = use_multi_guidance
 
@@ -220,24 +222,41 @@ class SFBrainEmbedder(AbstractEmbModel):
             auditory_fmri = batch.get("fmri_auditory")
             if auditory_fmri is not None:
                 auditory_fmri = auditory_fmri.to(self.dtype)
-            slow_out = self.slow_branch(fmri, auditory_fmri=auditory_fmri)
-            fast_out = self.fast_branch(eeg)
+
+            run_slow = self.active_branches in ("both", "slow_only")
+            run_fast = self.active_branches in ("both", "fast_only")
+
+            # Always run base encoders for CLS tokens (alignment loss needs them)
+            fmri_cls, fmri_spatial = self.fmri_encoder(fmri)
+            eeg_cls, eeg_spatial = self.eeg_encoder(eeg)
+
+            # Slow branch
+            if run_slow:
+                slow_out = self.slow_branch(fmri, auditory_fmri=auditory_fmri)
+                slow_feat = slow_out["slow_feat"]
+            else:
+                slow_out = {"fmri_cls": fmri_cls, "fmri_spatial": fmri_spatial}
+                slow_feat = torch.zeros_like(fmri_spatial)
+
+            # Fast branch
+            if run_fast:
+                fast_out = self.fast_branch(eeg)
+                fast_feat = fast_out["fast_feat"]
+            else:
+                fast_out = {"eeg_cls": eeg_cls, "eeg_spatial": eeg_spatial}
+                fast_feat = torch.zeros_like(eeg_spatial)
 
             if self.use_gated_fusion:
-                # Cache the raw gate_net inputs so the sampler / loss can
-                # re-invoke gated_fusion(slow_feat, fast_feat, t_emb=...) per
-                # diffusion step without re-running slow_branch / fast_branch.
-                self._last_slow_feat = slow_out["slow_feat"]
-                self._last_fast_feat = fast_out["fast_feat"]
+                self._last_slow_feat = slow_feat
+                self._last_fast_feat = fast_feat
                 z_b, alphas = self.gated_fusion(
-                    slow_out["slow_feat"], fast_out["fast_feat"], t_emb=None,
+                    slow_feat, fast_feat, t_emb=None,
                 )
             else:
-                # Fallback: simple concat + linear (CineSync-style)
                 self._last_slow_feat = None
                 self._last_fast_feat = None
                 z_b = self.fmri_eeg_linear(
-                    torch.cat([slow_out["fmri_spatial"], fast_out["eeg_spatial"]], dim=-1)
+                    torch.cat([slow_feat, fast_feat], dim=-1)
                 )
                 alphas = {k: torch.tensor([[0.25]], device=z_b.device, dtype=z_b.dtype).expand(z_b.shape[0], -1)
                           for k in ["alpha_key", "alpha_txt", "alpha_mot", "alpha_brain"]}
@@ -258,14 +277,13 @@ class SFBrainEmbedder(AbstractEmbModel):
                 context = z_b
                 self._last_premix = None
 
-            # Store intermediate outputs for loss computation
             self._last_slow_out = slow_out
             self._last_fast_out = fast_out
             self._last_alphas = alphas
 
             return context, clip_loss
 
-        # --- Baseline path (no SF branches) ---
+        # --- Baseline path (no SF branches at all) ---
         else:
             fmri_cls, fmri_spatial = self.fmri_encoder(fmri)
             eeg_cls, eeg_spatial = self.eeg_encoder(eeg)

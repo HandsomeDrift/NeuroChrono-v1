@@ -139,6 +139,7 @@ model:
             temporal_d_model: 512
             use_causal_mask: true
             use_temporal_guidance: true
+            active_branches: "both"  # "both" | "slow_only" | "fast_only" for ablation
             mode: infer
             ckpt: ''
             expose_premix: true
