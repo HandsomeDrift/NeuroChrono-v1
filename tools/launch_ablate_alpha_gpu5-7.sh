@@ -53,6 +53,7 @@ for i in 0 1 2; do
     echo "[$(date)] ${NAME} → GPU ${GPU} (split ${i})"
 
     ssh ts3 "ssh gpu2 'mkdir -p ${OUTDIR} && rm -rf ${OUTDIR}/* && \
+      cd ${PROJ_DIR} && \
       CUDA_VISIBLE_DEVICES=${GPU} \
       nohup ${PYTHON} -m torch.distributed.run \
           --standalone --nproc_per_node=1 --master_port=${PORT} \
