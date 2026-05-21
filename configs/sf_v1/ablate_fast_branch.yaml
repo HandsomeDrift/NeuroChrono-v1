@@ -1,0 +1,16 @@
+# Ablation E2: w/o Fast Branch (slow-only, fMRI-driven)
+#
+# Usage:
+#   python -m torch.distributed.run --standalone --nproc_per_node=4 \
+#     train_video_fmri.py \
+#     --base configs/sf_v1/cinebrain_sf_v3_pathB_model.yaml \
+#            configs/sf_v1/sf_v3_pathB_train.yaml \
+#            configs/sf_v1/ablate_fast_branch.yaml \
+#     --seed 42
+
+model:
+  conditioner_config:
+    params:
+      emb_models:
+        - params:
+            active_branches: "slow_only"
