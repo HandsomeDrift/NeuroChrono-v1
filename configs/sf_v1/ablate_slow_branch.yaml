@@ -12,5 +12,9 @@ model:
   conditioner_config:
     params:
       emb_models:
-        - params:
+        - is_trainable: True
+          input_key: fmri
+          ucg_rate: 0.1
+          target: sgm.modules.encoders.sf_embedder.SFBrainEmbedder
+          params:
             active_branches: "fast_only"

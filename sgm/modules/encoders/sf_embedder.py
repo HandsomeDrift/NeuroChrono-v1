@@ -3,6 +3,7 @@ SFBrainEmbedder: Drop-in replacement for BrainmbedderCLIP.
 When SF branches are disabled, degrades to CineSync-equivalent behavior.
 """
 import math
+import os
 import numpy as np
 import torch
 import torch.nn as nn
@@ -98,7 +99,7 @@ class SFBrainEmbedder(AbstractEmbModel):
         self.use_fast_branch = use_fast_branch
         self.freeze_slow_branch = freeze_slow_branch
         self.freeze_fast_branch = freeze_fast_branch
-        self.active_branches = active_branches
+        self.active_branches = os.environ.get("ACTIVE_BRANCHES", active_branches)
         self.use_gated_fusion = use_gated_fusion
         self.use_multi_guidance = use_multi_guidance
 
