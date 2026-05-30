@@ -1,0 +1,8 @@
+# E14: brain + keyframe + text — zero mot channel only
+model:
+  sampler_config:
+    params:
+      path_b:
+        enabled: true
+        t_emb_dim: 256
+        alpha_zero_channels: ["alpha_mot"]

@@ -1,0 +1,8 @@
+# E12: brain only — zero key, txt, mot channels
+model:
+  sampler_config:
+    params:
+      path_b:
+        enabled: true
+        t_emb_dim: 256
+        alpha_zero_channels: ["alpha_key", "alpha_txt", "alpha_mot"]
